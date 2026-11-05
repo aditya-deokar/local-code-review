@@ -46,7 +46,27 @@ if [ -z "$PR_NUMBER" ]; then
   exit 1
 fi
 
-log_info "Starting PR Review & Self-Healing Loop for Pull Request #${PR_NUMBER}"
+# Detect repository slug (owner/repo)
+REPO_SLUG=$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || echo "")
+log_info "Repository: ${REPO_SLUG:-unknown}, Pull Request #${PR_NUMBER}"
+
+# Locate dev-loops CLI (from npm:dev-loops package)
+DEV_LOOPS_CMD=""
+if command -v dev-loops >/dev/null 2>&1; then
+  DEV_LOOPS_CMD="dev-loops"
+elif [ -f "$HOME/.pi/agent/npm/node_modules/.bin/dev-loops" ]; then
+  DEV_LOOPS_CMD="$HOME/.pi/agent/npm/node_modules/.bin/dev-loops"
+elif [ -f "$HOME/.pi/agent/npm/node_modules/dev-loops/cli/index.mjs" ]; then
+  DEV_LOOPS_CMD="node $HOME/.pi/agent/npm/node_modules/dev-loops/cli/index.mjs"
+elif [ -f "${REPO_ROOT}/node_modules/.bin/dev-loops" ]; then
+  DEV_LOOPS_CMD="${REPO_ROOT}/node_modules/.bin/dev-loops"
+fi
+
+if [ -n "$DEV_LOOPS_CMD" ]; then
+  log_info "Found dev-loops package CLI: ${DEV_LOOPS_CMD}"
+else
+  log_info "dev-loops CLI not detected; will use standard gh CLI fallback for reviews and comments."
+fi
 
 # Configuration
 MAX_LOOPS="${MAX_LOOPS:-5}"
@@ -135,17 +155,10 @@ Your output must end with the exact line: RATING: X/5 (where X is an integer fro
   fi
 
   # 3. Post review comment to GitHub PR
-  log_info "Posting Agent 1 review comment to PR #${PR_NUMBER}..."
-  {
-    echo "## 🕵️ Code Review Report (Pass #${PASS})"
-    echo ""
-    cat "${REPO_ROOT}/.review_output.md"
-  } > "${REPO_ROOT}/.pr_comment_payload.md"
+  HEAD_SHA=$(git rev-parse HEAD 2>/dev/null || echo "")
+  log_info "Current HEAD SHA: ${HEAD_SHA}"
 
-  gh pr comment "$PR_NUMBER" --body-file "${REPO_ROOT}/.pr_comment_payload.md"
-  log_success "Posted review comment for Pass #${PASS}."
-
-  # 4. Gatekeeper Check: Parse RATING from Agent 1's output
+  # Gatekeeper Check: Parse RATING from Agent 1's output
   # Matches lines like 'RATING: 5/5', '**RATING: 5/5**', 'Rating: 3/5'
   PARSED_RATING=$(grep -ioE 'RATING:?[[:space:]]*[1-5][[:space:]]*/[[:space:]]*5' "${REPO_ROOT}/.review_output.md" | tail -n 1 | grep -oE '[1-5]' | head -n 1 || echo "")
 
@@ -155,6 +168,43 @@ Your output must end with the exact line: RATING: X/5 (where X is an integer fro
   fi
 
   log_info "Gatekeeper Check: Parsed Rating is [${PARSED_RATING}/5]"
+
+  if [ "$PARSED_RATING" -eq 5 ]; then
+    VERDICT="clean"
+  else
+    VERDICT="findings_present"
+  fi
+
+  # Post review using dev-loops package if available, else fallback to gh pr comment
+  POSTED_VIA_DEVLOOPS=false
+  if [ -n "$DEV_LOOPS_CMD" ] && [ -n "$REPO_SLUG" ] && [ -n "$HEAD_SHA" ]; then
+    log_info "Posting official PR review via 'dev-loops gate upsert-verdict' (verdict: ${VERDICT})..."
+    if $DEV_LOOPS_CMD gate upsert-verdict \
+         --repo "$REPO_SLUG" \
+         --pr "$PR_NUMBER" \
+         --head-sha "$HEAD_SHA" \
+         --verdict "$VERDICT" \
+         --findings-file "${REPO_ROOT}/.review_output.md" \
+         --gate review \
+         --execution-mode inline_single_agent \
+         --inline-reason "pi dev-loops pass #${PASS}"; then
+      POSTED_VIA_DEVLOOPS=true
+      log_success "Posted PR review via dev-loops for Pass #${PASS}."
+    else
+      log_warn "dev-loops gate upsert-verdict failed. Falling back to gh pr comment."
+    fi
+  fi
+
+  if [ "$POSTED_VIA_DEVLOOPS" = false ]; then
+    log_info "Posting Agent 1 review comment to PR #${PR_NUMBER} via gh pr comment..."
+    {
+      echo "## 🕵️ Code Review Report (Pass #${PASS})"
+      echo ""
+      cat "${REPO_ROOT}/.review_output.md"
+    } > "${REPO_ROOT}/.pr_comment_payload.md"
+    gh pr comment "$PR_NUMBER" --body-file "${REPO_ROOT}/.pr_comment_payload.md"
+    log_success "Posted review comment for Pass #${PASS}."
+  fi
 
   if [ "$PARSED_RATING" -eq 5 ]; then
     log_success "PR achieved a 5/5 rating on Pass #${PASS}! Loop complete."
@@ -209,12 +259,25 @@ Your task:
   log_info "Committing and pushing changes for Pass #${PASS}..."
   git add -A
   git commit -m "fix(coding-agent): resolve review findings from pass #${PASS}"
+  FIX_COMMIT_SHA=$(git rev-parse HEAD)
+  log_info "Created fix commit: ${FIX_COMMIT_SHA}"
 
   # Push to the PR head branch
   git push origin HEAD
 
-  # 9. Post status comment on PR
-  gh pr comment "$PR_NUMBER" --body "🤖 **Coding Agent (Pass #${PASS})**: Applied fixes for reported findings and pushed commit to branch. Triggering next review pass..."
+  # 9. Resolve review threads via dev-loops if available
+  if [ -n "$DEV_LOOPS_CMD" ] && [ -n "$REPO_SLUG" ]; then
+    log_info "Resolving open PR review threads via 'dev-loops gate reply-resolve'..."
+    $DEV_LOOPS_CMD gate reply-resolve \
+      --repo "$REPO_SLUG" \
+      --pr "$PR_NUMBER" \
+      --message "Resolved in commit ${FIX_COMMIT_SHA} during self-healing Pass #${PASS}." \
+      --disposition fixed \
+      --resolve || true
+  fi
+
+  # 10. Post status comment on PR
+  gh pr comment "$PR_NUMBER" --body "🤖 **Coding Agent (Pass #${PASS})**: Applied fixes (commit \`${FIX_COMMIT_SHA:0:7}\`) and pushed to branch. Next review pass triggered..."
   log_success "Pushed fixes and commented on PR #${PR_NUMBER}."
 
   # Wait briefly for remote git and GitHub cache to sync
