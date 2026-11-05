@@ -123,3 +123,46 @@ This plan outlines the architecture, implementation, and end-to-end verification
   - Copy-paste commands for manual triggering via GitHub and local CLI.
   - Customization instructions (thresholds, prompts, model switching).
   - Troubleshooting guide for common failure modes.
+
+---
+
+## Package Ecosystem Integration: Option A (`dev-loops` + `@henryqw/pi-pr`)
+
+### Phase 1: Environment & Package Installation (COMPLETED)
+- Installed verified packages from https://pi.dev/packages:
+  - `dev-loops` (v1.0.9): Deterministic PR gate review, upsert verdicts, and thread reply-resolve.
+  - `@henryqw/pi-pr` (v11.3.0): PR feedback lifecycle, comment sweeps, and CI fix skills.
+- Health verification:
+  - `dev-loops doctor`: 6/7 checks passed (GitHub CLI, auth, git repo, resolver, package layout).
+
+### Phase 2: Workflow & Script Integration (COMPLETED)
+- Updated `.github/scripts/run-review-loop.sh`:
+  - Dynamically discovers `dev-loops` binary (in PATH, Pi agent npm bin, or local node_modules).
+  - Uses `dev-loops gate upsert-verdict` to post official GitHub PR Reviews carrying verdict (`clean` vs `findings_present`).
+  - Safely caps review body at 1900 chars and whitelist issue/PR references (`--allowed-refs`) to pass `dev-loops` security guards.
+  - Integrated `dev-loops gate reply-resolve` to reply to open review threads and mark them resolved citing the fixing commit SHA.
+- Updated `.github/workflows/pr-review-loop.yml`:
+  - Added package installation commands: `pi install npm:dev-loops`, `pi install npm:@henryqw/pi-pr`.
+  - Exported `$HOME/.pi/agent/npm/node_modules/.bin` to `$GITHUB_PATH`.
+
+### Phase 3: Live End-to-End Test on Pull Request #2 (COMPLETED)
+- Pushed buggy authentication feature `src/utils/authHelper.js` with hardcoded JWT secret, missing null checks, and dead code.
+- Triggered loop on PR #2 (`aditya-deokar/local-code-review/pull/2`).
+- **Pass 1:**
+  - Agent 1 reviewed diff and identified all security, runtime, and dead code flaws; rated `1/5`.
+  - Gatekeeper identified `findings_present`.
+  - `dev-loops gate upsert-verdict` created official GitHub Review [#5789188126](https://github.com/aditya-deokar/local-code-review/pull/2#pullrequestreview-5789188126).
+  - Agent 2 repaired `src/utils/authHelper.js`, created `tests/authHelper.test.js` with 22 tests passing (`node --test`), committed `7e10006`, and pushed to branch.
+  - `dev-loops gate reply-resolve` executed with fixing commit SHA.
+- **Pass 2:**
+  - Agent 1 re-reviewed diff: found zero remaining issues; awarded `5/5` rating.
+  - `dev-loops gate upsert-verdict` created official clean review [#5789263428](https://github.com/aditya-deokar/local-code-review/pull/2#pullrequestreview-5789263428) with verdict `clean`.
+  - Gatekeeper posted final completion message: `✅ PR achieved a 5/5 rating! Loop complete.`
+  - Loop cleanly terminated with exit code 0.
+
+### Phase 4: Final Documentation & Verification (COMPLETED)
+- Updated `GUIDE.md` with:
+  - Architecture diagram detailing the dual-agent + `dev-loops` gatekeeper pattern.
+  - Exact live PR #2 verification evidence (Reviews #5789188126 and #5789263428).
+  - Full manual testing walkthrough and CLI commands.
+

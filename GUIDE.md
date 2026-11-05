@@ -217,27 +217,66 @@ You can run the exact orchestrator script locally against any open Pull Request 
 
 ## 4. Live Verification Proof (Pull Request #2)
 
-The system was verified end-to-end on Pull Request #2 with deliberate security, stability, and code quality bugs:
+The system was verified end-to-end on Pull Request #2 across two distinct test suites:
 
+### Test Suite 1: Mathematical Engine (`calculator.js`)
 1. **Buggy Code Introduced**:
    - Hardcoded `DUMMY_API_KEY = "sk-live-fake-secret-token-12345abcdef67890"` exported in `module.exports`.
    - Division by zero in `divide(a, b)`.
    - Null pointer dereference and empty array `NaN` in `calculateAverage(numbers)`.
    - Dead variables `unusedCalculationCounter` and `temporaryCalculationState`.
+2. **Pass #1**:
+   - **Agent 1** detected all 5 issues, generated inline annotations, and awarded: `RATING: 1/5`.
+   - **Gatekeeper** triggered **Agent 2**.
+   - **Agent 2** repaired `src/utils/calculator.js`, removed the secret, added zero-division assertions, added input type checks, removed dead code, and wrote a complete unit test suite in `tests/calculator.test.js`.
+   - Pushed commit: `dc13203`.
+3. **Pass #2**:
+   - **Agent 1** re-reviewed, confirmed all issues resolved, and rated `5/5`.
+   - **Gatekeeper** posted approval comment and cleanly exited.
 
-2. **Pass #1 Execution**:
-   - **Agent 1** detected all 5 issues, generated inline annotations, and awarded:
-     `RATING: 1/5`
-   - **Gatekeeper** parsed `1/5` and triggered **Agent 2**.
-   - **Agent 2** edited `src/utils/calculator.js`, removed the secret, added zero-division assertions, added input type checks, removed dead code, and wrote a complete unit test suite in `tests/calculator.test.js`.
-   - Pushed commit: `dc132035b2d73d6c88f412b1ce34901b2987862b`.
+---
 
-3. **Pass #2 Execution**:
-   - **Agent 1** re-reviewed the updated code and tests.
-   - Evaluated: `No issues found. Code is secure, correct, and well-structured.`
-   - Awarded: `RATING: 5/5`.
-   - **Gatekeeper** posted approval: `✅ PR achieved a 5/5 rating! Loop complete.`
-   - Successfully terminated with exit code `0`.
+### Test Suite 2: Package-Powered `dev-loops` Gate Review & Auto-Healing (`authHelper.js`)
+To verify the **`dev-loops`** package integration, deliberate security and type flaws were pushed to PR #2 in `src/utils/authHelper.js`:
+- Hardcoded `JWT_SECRET = "super-secret-jwt-signing-key-abcdef-123456"`.
+- Missing null/undefined validation in `parseBearerToken`, causing unhandled `TypeError: Cannot read properties of undefined (reading 'startsWith')`.
+- Missing null checks on `user` and `user.roles` in `verifyUserRole`.
+- Out-of-bounds crash in `maskApiKey` for strings under 8 characters.
+- Dead global tracking variable `globalAuthAttemptCounter`.
+
+#### Live Execution Flow & GitHub Artifacts:
+1. **Pass #1 (Official Review via `dev-loops gate upsert-verdict`)**:
+   - Agent 1 analyzed diff and flagged all critical flaws, rating `1/5`.
+   - `dev-loops gate upsert-verdict` created an **Official GitHub Pull Request Review**:
+     - **Review ID**: [#5789188126](https://github.com/aditya-deokar/local-code-review/pull/2#pullrequestreview-5789188126)
+     - **Head SHA**: `900c7377e937d2f59673422e695938f746d685a0`
+     - **Verdict**: `findings_present`
+     - **Review State**: `COMMENTED`
+   - Gatekeeper detected rating `1/5 < 5/5` and handed findings report to Agent 2.
+
+2. **Self-Healing & Thread Resolution**:
+   - Agent 2 refactored `src/utils/authHelper.js`:
+     - Replaced hardcoded secret with dynamic `getJwtSecret()` reading from `process.env.JWT_SECRET`.
+     - Added defensive checks for non-string/null/undefined in `parseBearerToken`.
+     - Added `Array.isArray(user.roles)` defensive checks in `verifyUserRole`.
+     - Handled short and invalid keys in `maskApiKey`.
+     - Removed dead tracking counter.
+     - Created comprehensive test suite in `tests/authHelper.test.js` (22 total tests passing across `calculator` and `authHelper`).
+   - Committed changes: `7e10006`.
+   - Pushed commit to PR branch `test/e2e-review-heal-pr`.
+   - Executed `dev-loops gate reply-resolve` to resolve open review threads citing commit `7e10006`.
+
+3. **Pass #2 (Official Approval via `dev-loops gate upsert-verdict`)**:
+   - Agent 1 re-inspected the updated diff and codebase:
+     > *"The implementation demonstrates exceptional code quality: comprehensive input validation across all functions, defense against null/undefined dereferencing, division by zero prevention, environment-based credential handling with zero hardcoded secrets, and exhaustive automated test coverage."*
+   - Emitted rating: `RATING: 5/5`.
+   - `dev-loops gate upsert-verdict` posted clean GitHub Review:
+     - **Review ID**: [#5789263428](https://github.com/aditya-deokar/local-code-review/pull/2#pullrequestreview-5789263428)
+     - **Head SHA**: `7e10006c588f7bc91042a78fcc344a6142237b6f`
+     - **Verdict**: `clean`
+   - Gatekeeper posted final completion message:
+     - [Issue Comment #6664825615](https://github.com/aditya-deokar/local-code-review/pull/2#issuecomment-6664825615): `✅ PR achieved a 5/5 rating! Loop complete.`
+   - Script exited cleanly with status `0`.
 
 ---
 
