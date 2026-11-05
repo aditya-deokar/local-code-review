@@ -71,9 +71,33 @@ The system strictly decouples the **Code Reviewer** (strictly read-only) from th
 | Component | Permissions / Tools | Responsibility |
 |---|---|---|
 | **Agent 1: Code Review Agent** | Strictly Read-Only (`read`, `grep`, `find`, `ls`) | Inspects `gh pr diff` and surrounding code. Produces structured markdown review with inline file/line annotations `- [File: path:line] (Severity: High/Medium/Low): Issue & fix` and closes with `RATING: X/5`. |
+| **`dev-loops` Package Integration** | `dev-loops gate upsert-verdict` & `reply-resolve` | Posts official GitHub Pull Request Reviews (`state: COMMENTED`) with verdict (`clean` or `findings_present`). Replies to open GitHub review threads with the 40-character fix commit SHA and automatically marks threads resolved. |
 | **The Gatekeeper** | Regex Parser & Decision Gate | Extracts integer rating (`1..5`). If `5/5`, posts approval comment and exits cleanly. If `< 5/5`, validates loop limits and triggers Agent 2. |
 | **Agent 2: Coding Agent** | Read/Write Execution (`read`, `edit`, `write`, `bash`) | Consumes Agent 1's feedback report, directly applies minimal targeted file edits to resolve every reported issue, cleans dead code, and ensures code builds. |
 | **Safety Circuit Breakers** | Script Orchestrator | • Enforces `MAX_LOOPS` (default: 5) to prevent infinite loops.<br>• Verifies `git status --porcelain`: if Agent 2 makes zero file changes, aborts immediately with a warning comment.<br>• Cleans ephemeral diff and markdown files prior to staging changes. |
+
+---
+
+## 2. Package Ecosystem Integration (`pi.dev/packages`)
+
+The loop integrates verified packages from the official [pi.dev/packages](https://pi.dev/packages) ecosystem:
+
+### 1. `dev-loops` (`npm:dev-loops`)
+- **Role:** Autonomous PR Gatekeeper & Thread Resolution.
+- **Commands used in the loop:**
+  - `dev-loops gate upsert-verdict`: Submits a first-class GitHub PR Review carrying the verdict (`clean` vs `findings_present`), reviewed head SHA, and markdown findings.
+  - `dev-loops gate reply-resolve`: Maps review feedback to the fixing commit SHA and auto-resolves open review comment threads on GitHub.
+  - `dev-loops doctor`: Verifies CLI and environment health.
+
+### 2. `@henryqw/pi-pr` (`npm:@henryqw/pi-pr`)
+- **Role:** PR Lifecycle & Feedback Sweep.
+- **Skills provided:** `pi-pr-comment-sweep`, `pi-pr-fix-ci`, `git-commit`, `update-from-main`.
+
+### Installation in Pi:
+```bash
+pi install npm:dev-loops
+pi install npm:@henryqw/pi-pr
+```
 
 ---
 
