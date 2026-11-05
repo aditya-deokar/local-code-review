@@ -104,7 +104,13 @@ while [ "$PASS" -le "$MAX_LOOPS" ]; do
 
   # 1. Fetch current PR diff
   log_info "Fetching PR diff via 'gh pr diff ${PR_NUMBER}'..."
-  gh pr diff "$PR_NUMBER" > "${REPO_ROOT}/.pr_review.diff"
+  gh pr diff "$PR_NUMBER" > "${REPO_ROOT}/.pr_review.diff" 2>/dev/null || true
+
+  # Fallback to local git diff against origin/main if gh diff is empty
+  if [ ! -s "${REPO_ROOT}/.pr_review.diff" ]; then
+    log_info "Fetching local diff against origin/main..."
+    git diff origin/main...HEAD > "${REPO_ROOT}/.pr_review.diff" || true
+  fi
 
   DIFF_SIZE=$(wc -c < "${REPO_ROOT}/.pr_review.diff" | tr -d ' ')
   log_info "PR diff size: ${DIFF_SIZE} bytes"
@@ -113,14 +119,14 @@ while [ "$PASS" -le "$MAX_LOOPS" ]; do
   log_info "Invoking Agent 1 (Code Reviewer, read-only mode)..."
   AGENT1_PROMPT="You are performing Pass #${PASS} of the review for Pull Request #${PR_NUMBER}.
 The git diff is saved in .pr_review.diff.
-Inspect this diff and read any surrounding files in the repository as needed to evaluate context.
+Inspect this diff using your 'read' tool and read any surrounding files in the repository as needed to evaluate context.
 Perform a thorough Greptile-style review according to your system prompt.
 Be specific with file and line references.
 Your output must end with the exact line: RATING: X/5 (where X is an integer from 1 to 5)."
 
   pi --no-session --approve --tools read,grep,find,ls \
      --append-system-prompt "$REVIEWER_PROMPT_FILE" \
-     -p "$AGENT1_PROMPT" > "${REPO_ROOT}/.review_output.md" 2>&1
+     -p "$AGENT1_PROMPT" > "${REPO_ROOT}/.review_output.md"
 
   # Check that Agent 1 produced output
   if [ ! -s "${REPO_ROOT}/.review_output.md" ]; then
@@ -152,7 +158,7 @@ Your output must end with the exact line: RATING: X/5 (where X is an integer fro
 
   if [ "$PARSED_RATING" -eq 5 ]; then
     log_success "PR achieved a 5/5 rating on Pass #${PASS}! Loop complete."
-    gh pr comment "$PR_NUMBER" --body "✅ **PR achieved a 5/5 rating!** Self-healing loop complete."
+    gh pr comment "$PR_NUMBER" --body "✅ PR achieved a 5/5 rating! Loop complete."
     cleanup_temp_files
     exit 0
   fi
@@ -183,7 +189,7 @@ Your task:
 
   pi --no-session --approve --tools read,edit,write,bash \
      --append-system-prompt "$CODER_PROMPT_FILE" \
-     -p "$AGENT2_PROMPT" > "${REPO_ROOT}/.coder_output.md" 2>&1
+     -p "$AGENT2_PROMPT" > "${REPO_ROOT}/.coder_output.md"
 
   # 6. Clean temporary files before inspecting git changes
   cleanup_temp_files
