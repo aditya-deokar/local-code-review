@@ -1,39 +1,58 @@
 // Math utility library
-const DUMMY_API_KEY = "sk-live-fake-secret-token-12345abcdef67890";
-const unusedCalculationCounter = 42;
-let temporaryCalculationState = "idle";
 
 /**
  * Adds two numbers.
+ * @param {number} a
+ * @param {number} b
+ * @returns {number}
  */
 function add(a, b) {
+  if (typeof a !== 'number' || typeof b !== 'number' || !Number.isFinite(a) || !Number.isFinite(b)) {
+    throw new TypeError('Both arguments must be finite numbers');
+  }
   return a + b;
 }
 
 /**
  * Divides a by b.
- * BUG: Missing division by zero check and NaN check.
+ * Throws an Error if b is 0 or if inputs are not finite numbers.
+ * @param {number} a
+ * @param {number} b
+ * @returns {number}
  */
 function divide(a, b) {
-  // Vulnerable to division by zero: divide(10, 0) returns Infinity
+  if (typeof a !== 'number' || typeof b !== 'number' || !Number.isFinite(a) || !Number.isFinite(b)) {
+    throw new TypeError('Both arguments must be finite numbers');
+  }
+  if (b === 0) {
+    throw new Error('Division by zero is not allowed');
+  }
   return a / b;
 }
 
 /**
  * Calculates the average of an array of numbers.
- * BUG: Missing validation for null/undefined/empty array or non-array types.
+ * Throws an Error if numbers is not a non-empty array or contains non-numeric values.
+ * @param {number[]} numbers
+ * @returns {number}
  */
 function calculateAverage(numbers) {
-  // Crashes if numbers is null, undefined, or empty
+  if (!Array.isArray(numbers) || numbers.length === 0) {
+    throw new Error('Input must be a non-empty array of numbers');
+  }
+
   let sum = 0;
   for (let i = 0; i < numbers.length; i++) {
-    sum += numbers[i];
+    const val = numbers[i];
+    if (typeof val !== 'number' || !Number.isFinite(val)) {
+      throw new TypeError(`Array element at index ${i} must be a finite number`);
+    }
+    sum += val;
   }
   return sum / numbers.length;
 }
 
 module.exports = {
-  DUMMY_API_KEY,
   add,
   divide,
   calculateAverage,
