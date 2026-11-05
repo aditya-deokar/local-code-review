@@ -42,17 +42,20 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install Pi CLI & Plannotator Extension
+      - name: Install Pi CLI & Packages (Plannotator, dev-loops, @henryqw/pi-pr)
         run: |
           curl -fsSL https://pi.dev/install.sh | sh || npm install -g @earendil-works/pi-coding-agent
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           echo "$HOME/.pi/agent/bin" >> $GITHUB_PATH
-          export PATH="$HOME/.local/bin:$HOME/.pi/agent/bin:$PATH"
+          echo "$HOME/.pi/agent/npm/node_modules/.bin" >> $GITHUB_PATH
+          export PATH="$HOME/.local/bin:$HOME/.pi/agent/bin:$HOME/.pi/agent/npm/node_modules/.bin:$PATH"
           if ! command -v pi &> /dev/null; then
             npm install -g @earendil-works/pi-coding-agent
           fi
           pi --version
           pi install npm:@plannotator/pi-extension || true
+          pi install npm:dev-loops || true
+          pi install npm:@henryqw/pi-pr || true
 
       - name: Run Review & Self-Healing Loop
         env:
