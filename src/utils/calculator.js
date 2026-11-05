@@ -1,39 +1,59 @@
 // Math utility library
-const DUMMY_API_KEY = "sk-live-fake-secret-token-12345abcdef67890";
-const unusedCalculationCounter = 42;
-let temporaryCalculationState = "idle";
 
 /**
  * Adds two numbers.
+ * @param {number} a
+ * @param {number} b
+ * @returns {number}
  */
 function add(a, b) {
+  if (typeof a !== "number" || Number.isNaN(a) || typeof b !== "number" || Number.isNaN(b)) {
+    throw new TypeError("Both arguments must be valid numbers");
+  }
   return a + b;
 }
 
 /**
  * Divides a by b.
- * BUG: Missing division by zero check and NaN check.
+ * @param {number} a
+ * @param {number} b
+ * @returns {number}
  */
 function divide(a, b) {
-  // Vulnerable to division by zero: divide(10, 0) returns Infinity
+  if (typeof a !== "number" || Number.isNaN(a) || typeof b !== "number" || Number.isNaN(b)) {
+    throw new TypeError("Both arguments must be valid numbers");
+  }
+  if (b === 0) {
+    throw new Error("Division by zero");
+  }
   return a / b;
 }
 
 /**
  * Calculates the average of an array of numbers.
- * BUG: Missing validation for null/undefined/empty array or non-array types.
+ * @param {number[]} numbers
+ * @returns {number}
  */
 function calculateAverage(numbers) {
-  // Crashes if numbers is null, undefined, or empty
+  if (!Array.isArray(numbers)) {
+    throw new TypeError("Input must be an array of numbers");
+  }
+  if (numbers.length === 0) {
+    throw new RangeError("Array must not be empty");
+  }
+
   let sum = 0;
   for (let i = 0; i < numbers.length; i++) {
-    sum += numbers[i];
+    const num = numbers[i];
+    if (typeof num !== "number" || Number.isNaN(num)) {
+      throw new TypeError(`Element at index ${i} is not a valid number`);
+    }
+    sum += num;
   }
   return sum / numbers.length;
 }
 
 module.exports = {
-  DUMMY_API_KEY,
   add,
   divide,
   calculateAverage,
