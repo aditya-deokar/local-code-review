@@ -1,0 +1,17 @@
+{
+  "name": "local-code-review",
+  "version": "1.0.0",
+  "description": "Automated Greptile-style PR review and self-healing loop powered by Pi coding agent",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "code-review",
+    "agentic-ai",
+    "pi",
+    "github-actions"
+  ],
+  "author": "Aditya Deokar",
+  "license": "MIT"
+}

@@ -1,0 +1,18 @@
+# Temporary agent review artifacts
+.pr_review.diff
+.review_output.md
+.coder_output.md
+.temp_*
+*.log
+
+# Dependencies and environment
+node_modules/
+.env
+.env.*
+!.env.example
+
+# OS and Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
