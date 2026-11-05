@@ -1,8 +1,8 @@
-# Automated PR Review & Self-Healing Loop Guide
+# Automated PR Review Guide (Local Pi Engine)
 
-This repository implements an autonomous, Greptile-style Pull Request Review and Self-Healing Loop triggered by commenting `@pr-review` on any GitHub Pull Request.
+This repository implements a lightweight, strictly read-only, Greptile-style Pull Request Review engine triggered by commenting `@pr-review` on any GitHub Pull Request or run locally via `.github/scripts/run-review-loop.sh <PR_NUMBER>`.
 
-The system strictly decouples the **Code Reviewer** (strictly read-only) from the **Coding Agent** (read/write execution), orchestrated by a deterministic **Gatekeeper** that enforces quality thresholds before permitting approval.
+The **Code Reviewer** is strictly read-only (`--tools read,grep,find,ls`): it never modifies files, commits, or pushes. Your own coding agent authors the code and pushes commits, while the Pi reviewer provides unbiased Greptile-quality reviews, file/line annotations, ratings (`RATING: X/5`), and formal GitHub reviews via `dev-loops`.
 
 ---
 
@@ -11,28 +11,47 @@ The system strictly decouples the **Code Reviewer** (strictly read-only) from th
 ### System Architecture Diagram
 
 ```
-                             User Comments: "@pr-review"
-                                          │
-                                          ▼
-                       ┌─────────────────────────────────────┐
-                       │      GitHub Actions / Local CLI     │
-                       │  • Add reaction (👀) to comment      │
-                       │  • Checkout PR head branch          │
-                       └──────────────────┬──────────────────┘
-                                          │
-                                          ▼
-                      ┌───────────────────────────────────────┐
-            ┌────────►│ Pass #X: Fetch Diff (`gh pr diff`)    │
-            │         └───────────────────┬───────────────────┘
-            │                             │
-            │                             ▼
-            │         ┌───────────────────────────────────────┐
-            │         │ Agent 1: Code Reviewer (Read-Only)    │
-            │         │ Tools: read, grep, find, ls           │
-            │         │ Role: Greptile-style PR review        │
-            │         │ Output: Structured markdown findings  │
-            │         │ Mandatory: `RATING: X/5`              │
-            │         └───────────────────┬───────────────────┘
+                      ┌─────────────────────────────────────┐
+                      │        Your Coding Agent            │
+                      │    (writes code & pushes PR)        │
+                      └──────────────────┬──────────────────┘
+                                         │ git push
+                                         ▼
+                      ┌─────────────────────────────────────┐
+                      │    User Comments: "@pr-review"      │
+                      │         (or runs local script)      │
+                      └──────────────────┬──────────────────┘
+                                         │
+                                         ▼
+                      ┌─────────────────────────────────────┐
+                      │   Fetch Diff & PR Head Commit SHA   │
+                      │   (`gh pr diff <PR_NUMBER>`)        │
+                      └──────────────────┬──────────────────┘
+                                         │
+                                         ▼
+                      ┌─────────────────────────────────────┐
+                      │ Code Reviewer Agent (Strictly RO)   │
+                      │ Tools: read, grep, find, ls         │
+                      │ Role: Greptile-style PR review      │
+                      │ Output: Structured markdown findings│
+                      │ Mandatory: `RATING: X/5`            │
+                      └──────────────────┬──────────────────┘
+                                         │
+                                         ▼
+                      ┌─────────────────────────────────────┐
+                      │ dev-loops gate upsert-verdict       │
+                      │ Formal GitHub Pull Request Review:  │
+                      │ • clean (if 5/5)                    │
+                      │ • findings_present (if < 5/5)       │
+                      └──────────────────┬──────────────────┘
+                                         │
+                                         ▼
+                      ┌─────────────────────────────────────┐
+                      │ Terminal / PR Comments Output       │
+                      │ Your coding agent reads feedback,   │
+                      │ makes fixes, and pushes next commit │
+                      └─────────────────────────────────────┘
+```
             │                             │
             │                             ▼
             │         ┌───────────────────────────────────────┐
