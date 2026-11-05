@@ -102,6 +102,7 @@ cleanup_temp_files() {
   rm -f "${REPO_ROOT}/.pr_review.diff" \
         "${REPO_ROOT}/.review_output.md" \
         "${REPO_ROOT}/.coder_output.md" \
+        "${REPO_ROOT}/.devloops_findings.txt" \
         "${REPO_ROOT}/.pr_comment_payload.md" \
         "${REPO_ROOT}/.temp_*" 2>/dev/null || true
 }
@@ -179,15 +180,25 @@ Your output must end with the exact line: RATING: X/5 (where X is an integer fro
   POSTED_VIA_DEVLOOPS=false
   if [ -n "$DEV_LOOPS_CMD" ] && [ -n "$REPO_SLUG" ] && [ -n "$HEAD_SHA" ]; then
     log_info "Posting official PR review via 'dev-loops gate upsert-verdict' (verdict: ${VERDICT})..."
+    
+    # dev-loops caps --findings-file at 2000 chars; prepare compliant findings summary
+    DEVLOOPS_FINDINGS="${REPO_ROOT}/.devloops_findings.txt"
+    if [ "$(wc -c < "${REPO_ROOT}/.review_output.md" | tr -d ' ')" -gt 1900 ]; then
+      head -c 1900 "${REPO_ROOT}/.review_output.md" > "$DEVLOOPS_FINDINGS"
+    else
+      cp "${REPO_ROOT}/.review_output.md" "$DEVLOOPS_FINDINGS"
+    fi
+
     if $DEV_LOOPS_CMD gate upsert-verdict \
          --repo "$REPO_SLUG" \
          --pr "$PR_NUMBER" \
          --head-sha "$HEAD_SHA" \
          --verdict "$VERDICT" \
-         --findings-file "${REPO_ROOT}/.review_output.md" \
+         --findings-file "$DEVLOOPS_FINDINGS" \
          --gate review \
          --execution-mode inline_single_agent \
-         --inline-reason "pi dev-loops pass #${PASS}"; then
+         --inline-reason "pi dev-loops pass #${PASS}" \
+         --allowed-refs "${PR_NUMBER},1,2,3,4,5,6,7,8,9,10"; then
       POSTED_VIA_DEVLOOPS=true
       log_success "Posted PR review via dev-loops for Pass #${PASS}."
     else

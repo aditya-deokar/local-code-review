@@ -1,34 +1,58 @@
 /**
- * Authentication helper utilities (deliberately flawed for review loop testing)
+ * Authentication helper utilities.
  */
 
-// SECURITY ISSUE: Hardcoded sensitive secret in source code
-const JWT_SECRET = "super-secret-jwt-signing-key-abcdef-123456";
-
-// DEAD CODE: Unused global tracking variable
-let globalAuthAttemptCounter = 0;
-
-function parseBearerToken(authHeader) {
-  // BUG: Unhandled null/undefined input causes TypeError: Cannot read properties of undefined (reading 'startsWith')
-  if (authHeader.startsWith("Bearer ")) {
-    return authHeader.substring(7);
-  }
-  return null;
+/**
+ * Retrieves the JWT secret from environment variables.
+ * @returns {string|undefined}
+ */
+function getJwtSecret() {
+  return process.env.JWT_SECRET;
 }
 
+/**
+ * Parses and extracts a Bearer token from an Authorization header.
+ * Safely handles null, undefined, or malformed inputs without throwing.
+ * @param {string} authHeader
+ * @returns {string|null}
+ */
+function parseBearerToken(authHeader) {
+  if (typeof authHeader !== 'string' || !authHeader.startsWith('Bearer ')) {
+    return null;
+  }
+  const token = authHeader.substring(7).trim();
+  return token.length > 0 ? token : null;
+}
+
+/**
+ * Verifies whether a user has the required role.
+ * Safely handles null/undefined user or non-array roles.
+ * @param {object} user
+ * @param {string} requiredRole
+ * @returns {boolean}
+ */
 function verifyUserRole(user, requiredRole) {
-  // BUG: No null check on user or user.roles, causes runtime exception
-  // BUG: Array search using loose equality
+  if (!user || typeof user !== 'object' || !Array.isArray(user.roles) || typeof requiredRole !== 'string') {
+    return false;
+  }
   return user.roles.includes(requiredRole);
 }
 
+/**
+ * Masks an API key for safe logging, exposing only the first and last 4 characters.
+ * Returns '***' if the key is not a string or has fewer than 8 characters.
+ * @param {string} apiKey
+ * @returns {string}
+ */
 function maskApiKey(apiKey) {
-  // BUG: Fails when apiKey length is less than 8, produces negative substring indexes or crashes
-  return apiKey.substring(0, 4) + "..." + apiKey.substring(apiKey.length - 4);
+  if (typeof apiKey !== 'string' || apiKey.length < 8) {
+    return '***';
+  }
+  return apiKey.substring(0, 4) + '...' + apiKey.substring(apiKey.length - 4);
 }
 
 module.exports = {
-  JWT_SECRET,
+  getJwtSecret,
   parseBearerToken,
   verifyUserRole,
   maskApiKey,
